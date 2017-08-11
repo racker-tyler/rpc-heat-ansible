@@ -1,3 +1,4 @@
+#Scrapping for now
 heat_template_version: 2017-08-11
 
 description: Deploy A Rackspace Private Cloud - Compute + Block + Object Environment
