@@ -115,6 +115,38 @@ resources:
             content: { get_attr: [ server_server1, accessIPv4 ] }
             content: { get_attr: [ server_server2, accessIPv4 ] }
             content: { get_attr: [ server_server3, accessIPv4 ] }
+          - path: /opt/cloud-training/runcmd-bash
+            permissions: "0700"
+            content:
+              str_replace:
+                template: |
+                  #!/bin/bash
+                  export HOME="/root"
+                  set -e
+                  set -x
+                  function exit_failure {
+                    %swift_signal_notify% --data-binary '{"status": "FAILURE", "reason": "'"$@"'"}'
+                    exit 1
+                  }
+                  function exit_success {
+                    %swift_signal_notify% --data-binary '{"status": "SUCCESS"}'
+                  }
+                  exit_success
+                params:
+                  "%swift_signal_notify%": { get_attr: [ swift_signal_handle_server1, curl_cli ] }
+        runcmd:
+          - tmux new-session -s runcmd -n runcmd-bash -d
+          - tmux new-window -n runcmd-bash-logs
+          - tmux new-window -n deploy-sh-logs
+          - tmux select-window -t runcmd-bash-logs
+          - tmux send-keys "touch /opt/cloud-training/runcmd-bash.err /opt/cloud-training/runcmd-bash.log" C-m
+          - tmux send-keys "multitail /opt/cloud-training/runcmd-bash.err /opt/cloud-training/runcmd-bash.log" C-m
+          - tmux select-window -t deploy-sh-logs
+          - tmux send-keys "touch /opt/cloud-training/deploy.sh.err /opt/cloud-training/deploy.sh.log" C-m
+          - tmux send-keys "multitail /opt/cloud-training/deploy.sh.err /opt/cloud-training/deploy.sh.log" C-m
+          - tmux select-window -t runcmd-bash
+          - tmux send-keys "/opt/cloud-training/runcmd-bash >> /opt/cloud-training/runcmd-bash.log 2>> /opt/cloud-training/runcmd-bash.err" C-m
+
 
   cloud_config_server2:
     type: OS::Heat::CloudConfig
