@@ -1,0 +1,282 @@
+heat_template_version: 2013-05-23
+
+description: Demo template to deploy A Rackspace Private Cloud - Compute + Block
+
+parameters:
+  server1_flavor:
+    type: string
+    label: Node 1 Flavor
+    default: '8 GB Performance'
+  server2_flavor:
+    type: string
+    label: Node 2 Flavor
+    default: '4 GB Performance'
+  server3_flavor:
+    type: string
+    label: Node 3 Flavor
+    default: '4 GB Performance'
+
+resources:
+
+  password:
+    type: OS::Heat::RandomString
+    properties:
+      length: 12
+      sequence: lettersdigits
+
+  keypair:
+    type: OS::Nova::KeyPair
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-rpc-keypair"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      save_private_key: True
+
+  network:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-rpc-network"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+
+  subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network: { get_resource: network }
+      cidr: 192.168.2.0/24
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-rpc-subnet"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+
+  swift_signal_handle_server1:
+    type: OS::Heat::SwiftSignalHandle
+
+  swift_signal_handle_server2:
+    type: OS::Heat::SwiftSignalHandle
+
+  swift_signal_handle_server3:
+    type: OS::Heat::SwiftSignalHandle
+
+  swift_signal_server1:
+    type: OS::Heat::SwiftSignal
+    properties:
+      handle: { get_resource: swift_signal_handle_server1 }
+      count: 1
+      timeout: 14400
+
+  swift_signal_server2:
+    type: OS::Heat::SwiftSignal
+    properties:
+      handle: { get_resource: swift_signal_handle_server2 }
+      count: 1
+      timeout: 7200
+
+  swift_signal_server3:
+    type: OS::Heat::SwiftSignal
+    properties:
+      handle: { get_resource: swift_signal_handle_server3 }
+      count: 1
+      timeout: 7200
+
+  cloud_config_server1:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        output:
+          all: '| tee -a /var/log/cloud-init-output.log'
+        apt_upgrade: true
+        packages:
+          - linux-image-extra-virtual
+          - tmux
+          - htop
+          - multitail
+          - build-essential
+          - software-properties-common
+          - python-software-properties
+          - curl
+          - git-core
+          - python-pip
+          - python-apt
+          - python-dev
+          - libffi-dev
+          - libssl-dev
+        write_files:
+          - path: /opt/cloud-training/id_rsa
+            permissions: "0600"
+            content: { get_attr: [ keypair, private_key ] }
+          - path: /opt/cloud-training/server_ips.txt
+            permissions: "700"
+            content: { get_attr: [ server_server1, accessIPv4 ] }
+            content: { get_attr: [ server_server2, accessIPv4 ] }
+            content: { get_attr: [ server_server3, accessIPv4 ] }
+
+  cloud_config_server2:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        output:
+          all: '| tee -a /var/log/cloud-init-output.log'
+        apt_upgrade: true
+        packages:
+          - tmux
+          - htop
+          - multitail
+        runcmd:
+          - str_replace:
+              template: |
+                %swift_signal_notify% --data-binary '{"status": "SUCCESS"}'
+              params:
+                "%swift_signal_notify%": { get_attr: [ swift_signal_handle_server2, curl_cli ] }
+
+  cloud_config_server3:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        output:
+          all: '| tee -a /var/log/cloud-init-output.log'
+        apt_upgrade: true
+        packages:
+          - tmux
+          - htop
+          - multitail
+        runcmd:
+          - str_replace:
+              template: |
+                %swift_signal_notify% --data-binary '{"status": "SUCCESS"}'
+              params:
+                "%swift_signal_notify%": { get_attr: [ swift_signal_handle_server3, curl_cli ] }
+
+  server_server1:
+    type: OS::Nova::Server
+    depends_on: [ swift_signal_server2, swift_signal_server3 ]
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server1"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      flavor: { get_param: "server1_flavor" }
+      image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
+      diskConfig: AUTO
+      block_device_mapping:
+        - device_name: /dev/xvdz
+          volume_id: { get_resource: volume_server1 }
+      networks:
+        - uuid: 00000000-0000-0000-0000-000000000000
+        - uuid: 11111111-1111-1111-1111-111111111111
+        - network: { get_resource: network }
+      key_name: { get_resource: keypair }
+      admin_pass: { get_attr: [ password, value ] }
+      config_drive: True
+      user_data_format: RAW
+      user_data: { get_resource: cloud_config_server1 }
+
+  server_server2:
+    type: OS::Nova::Server
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server2"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      flavor: { get_param: "server2_flavor" }
+      image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
+      diskConfig: AUTO
+      block_device_mapping:
+        - device_name: /dev/xvdz
+          volume_id: { get_resource: volume_server2 }
+      networks:
+        - uuid: 00000000-0000-0000-0000-000000000000
+        - uuid: 11111111-1111-1111-1111-111111111111
+        - network: { get_resource: network }
+      key_name: { get_resource: keypair }
+      admin_pass: { get_attr: [ password, value ] }
+      config_drive: True
+      user_data_format: RAW
+      user_data: { get_resource: cloud_config_server2 }
+
+  server_server3:
+    type: OS::Nova::Server
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server3"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      flavor: { get_param: "server3_flavor" }
+      image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
+      diskConfig: AUTO
+      block_device_mapping:
+        - device_name: /dev/xvdz
+          volume_id: { get_resource: volume_server3 }
+      networks:
+        - uuid: 00000000-0000-0000-0000-000000000000
+        - uuid: 11111111-1111-1111-1111-111111111111
+        - network: { get_resource: network } #Update this
+      key_name: { get_resource: keypair }
+      admin_pass: { get_attr: [ password, value ] }
+      config_drive: True
+      user_data_format: RAW
+      user_data: { get_resource: cloud_config_server3 } #Update this
+
+  volume_server1:
+    type: OS::Cinder::Volume
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server1"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      size: 170
+      volume_type: SSD
+
+  volume_server2:
+    type: OS::Cinder::Volume
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server2"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      size: 75
+      volume_type: SSD
+
+  volume_server3:
+    type: OS::Cinder::Volume
+    properties:
+      name:
+        str_replace:
+          template: "%heat_stack_prefix%-server3"
+          params:
+            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+      size: 75
+      volume_type: SSD
+
+outputs:
+  password:
+    description: Password
+    value: { get_attr: [ password, value ] }
+  private_key:
+    description: Private Key
+    value: { get_attr: [ keypair, private_key ] }
+  server_server1_ip:
+    description: Infra1 IP
+    value: { get_attr: [ server_server1, accessIPv4 ] }
+  all_ips:
+    description: All IPs
+    value:
+      str_replace:
+        template: |
+          server1   - %server_server1_ip%
+          server2  - %server_server2_ip%
+          server3 - %server_server3_ip%
+        params:
+          "%server_server1_ip%":   { get_attr: [ server_server1, accessIPv4 ] }
+          "%server_server2_ip%":  { get_attr: [ server_server2, accessIPv4 ] }
+          "%server_server3_ip%": { get_attr: [ server_server3, accessIPv4 ] }
