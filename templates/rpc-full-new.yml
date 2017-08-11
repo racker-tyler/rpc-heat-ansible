@@ -89,6 +89,55 @@ resources:
       details:
         address: { get_param: "maas_notification_email_address" }
 
+ config:  #Name for the Software Config resource. Can be renamed. 
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible #Need to install the ansible hook on the images we use
+      inputs:
+      - name: foo
+      - name: bar
+      outputs:
+      - name: result
+      config:
+        get_file:  #Need to add location of ansible scripts. May have to be setup locally.
+
+  deployment: #ran after the server is created 
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: config #Name of the config resource we added earlier 
+      server:
+        get_resource: server #Name of the server resource we setup
+      input_values:
+        foo: fooooo
+        bar: baaaaa
+
+  other_deployment: #Other servers we need to create. Should run ansible simultaneously.
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: config
+      server:
+        get_resource: server
+      input_values:
+        foo: fu
+        bar: barmy
+      actions: #optional but states when ansible should run. Maybe only on create? 
+      - CREATE
+      - UPDATE
+      - SUSPEND
+      - RESUME
+
+  server: #Server resource for our config. Will pull bits from the resources below.
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      security_groups:
+      - {get_resource: the_sg}
+      user_data_format: SOFTWARE_CONFIG
+
   notification_plan:
     type: Rackspace::CloudMonitoring::NotificationPlan
     properties:
