@@ -25,14 +25,9 @@ resources:
       sequence: lettersdigits
 
   keypair:
-    type: OS::Nova::KeyPair
+    type: shared.yml
     properties:
-      name:
-        str_replace:
-          template: "%heat_stack_prefix%-rpc-keypair"
-          params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
-      save_private_key: True
+      key_name: private_key 
 
   network:
     type: OS::Neutron::Net
