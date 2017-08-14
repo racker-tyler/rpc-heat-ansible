@@ -1,4 +1,4 @@
-heat_template_version: 2013-05-23
+heat_template_version: 2015-10-15
 
 description: Demo template to deploy A Rackspace Private Cloud - Compute + Block
 
@@ -15,6 +15,16 @@ parameters:
     type: string
     label: Node 3 Flavor
     default: '4 GB Performance'
+  stack_name:
+    label: "Stack Name Prefix"
+    description: stack name for labs
+    default: "demo"
+    type: string
+  keypair:
+    label: "Stack Name KeyPair"
+    description: keypair for labs
+    default: "demo"
+    type: string
 
 resources:
 
@@ -24,11 +34,6 @@ resources:
       length: 12
       sequence: lettersdigits
 
-  keypair:
-    type: shared.yml
-    properties:
-      key_name: private_key 
-
   network:
     type: OS::Neutron::Net
     properties:
@@ -36,8 +41,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-rpc-network"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
-
+           "%heat_stack_prefix%": { get_param: stack_name  }
   subnet:
     type: OS::Neutron::Subnet
     properties:
@@ -47,7 +51,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-rpc-subnet"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+           "%heat_stack_prefix%": { get_param: stack_name  }
 
   swift_signal_handle_server1:
     type: OS::Heat::SwiftSignalHandle
@@ -102,9 +106,6 @@ resources:
           - libffi-dev
           - libssl-dev
         write_files:
-          - path: /opt/cloud-training/id_rsa
-            permissions: "0600"
-            content: { get_attr: [ keypair, private_key ] }
           - path: /opt/cloud-training/server_ips.txt
             permissions: "700"
             content:
@@ -197,7 +198,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server1"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+            "%heat_stack_prefix%": { get_param: stack_name  }
       flavor: { get_param: "server1_flavor" }
       image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
       diskConfig: AUTO
@@ -208,7 +209,7 @@ resources:
         - uuid: 00000000-0000-0000-0000-000000000000
         - uuid: 11111111-1111-1111-1111-111111111111
         - network: { get_resource: network }
-      key_name: { get_resource: keypair }
+      key_name: { get_param: keypair }
       admin_pass: { get_attr: [ password, value ] }
       config_drive: True
       user_data_format: RAW
@@ -221,7 +222,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server2"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+            "%heat_stack_prefix%": { get_param: stack_name  }
       flavor: { get_param: "server2_flavor" }
       image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
       diskConfig: AUTO
@@ -232,7 +233,7 @@ resources:
         - uuid: 00000000-0000-0000-0000-000000000000
         - uuid: 11111111-1111-1111-1111-111111111111
         - network: { get_resource: network }
-      key_name: { get_resource: keypair }
+      key_name: { get_param: keypair }
       admin_pass: { get_attr: [ password, value ] }
       config_drive: True
       user_data_format: RAW
@@ -245,7 +246,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server3"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+           "%heat_stack_prefix%": { get_param: stack_name  }
       flavor: { get_param: "server3_flavor" }
       image: Ubuntu 14.04 LTS (Trusty Tahr) (PV)
       diskConfig: AUTO
@@ -256,7 +257,7 @@ resources:
         - uuid: 00000000-0000-0000-0000-000000000000
         - uuid: 11111111-1111-1111-1111-111111111111
         - network: { get_resource: network } #Update this
-      key_name: { get_resource: keypair }
+      key_name: { get_param: keypair }
       admin_pass: { get_attr: [ password, value ] }
       config_drive: True
       user_data_format: RAW
@@ -269,7 +270,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server1"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+           "%heat_stack_prefix%": { get_param: stack_name  }
       size: 170
       volume_type: SSD
 
@@ -280,7 +281,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server2"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+           "%heat_stack_prefix%": { get_param: stack_name  }
       size: 75
       volume_type: SSD
 
@@ -291,7 +292,7 @@ resources:
         str_replace:
           template: "%heat_stack_prefix%-server3"
           params:
-            "%heat_stack_prefix%": { "Fn::Select": [ "0", { "Fn::Split" : [ "-", { get_param: "OS::stack_id" } ] } ] }
+           "%heat_stack_prefix%": { get_param: stack_name  }
       size: 75
       volume_type: SSD
 
@@ -299,11 +300,14 @@ outputs:
   password:
     description: Password
     value: { get_attr: [ password, value ] }
-  private_key:
-    description: Private Key
-    value: { get_attr: [ keypair, private_key ] }
-  server_server1_ip:
-    description: Infra1 IP
+  server1_ip:
+    description: Server1 IP
+    value: { get_attr: [ server_server1, accessIPv4 ] }
+  server2_ip:
+    description: Server2 IP
+    value: { get_attr: [ server_server2, accessIPv4 ] }
+  server3_ip:
+    description: Server3 IP
     value: { get_attr: [ server_server1, accessIPv4 ] }
   all_ips:
     description: All IPs

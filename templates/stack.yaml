@@ -1,0 +1,46 @@
+heat_template_version: 2015-10-15
+
+description: Shared Resources for Labs
+
+resources:
+  stack_name:
+    type: OS::Heat::TestResource
+    properties:
+      value: 
+        str_replace:
+         template: "%heat_stack_prefix%"
+         params:
+           "%heat_stack_prefix%": { str_split : [ "-", { get_param: "OS::stack_id" } ,0 ] } 
+
+  shared:
+    type: shared.yaml
+    properties:
+      stack_name: { get_attr: [ stack_name, output ] }
+  
+  servers:
+    type: student.yaml
+    properties:
+      keypair: { get_attr: [ shared, keypair] }
+      stack_name: { get_attr: [ stack_name, output ] }
+
+outputs:
+  stack_name:
+    description: Stack Name
+    value: { get_attr: [ stack_name, output ] }
+
+  private_key:
+    description: Private Key
+    value: { get_attr: [ shared, private_key ] }
+
+  all_ips:
+    description: All IPs
+    value:
+      str_replace:
+        template: |
+          server1   - %server_server1_ip%
+          server2  - %server_server2_ip%
+          server3 - %server_server3_ip%
+        params:
+          "%server_server1_ip%":   { get_attr: [ servers ,server1_ip, accessIPv4 ] }
+          "%server_server2_ip%":  { get_attr: [ servers, server2_ip, accessIPv4 ] }
+          "%server_server3_ip%": { get_attr: [ servers, server3_ip, accessIPv4 ] }
