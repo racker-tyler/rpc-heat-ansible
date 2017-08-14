@@ -112,9 +112,15 @@ resources:
             content: { get_attr: [ keypair, private_key ] }
           - path: /opt/cloud-training/server_ips.txt
             permissions: "700"
-            content: { get_attr: [ server_server1, accessIPv4 ] }
-            content: { get_attr: [ server_server2, accessIPv4 ] }
-            content: { get_attr: [ server_server3, accessIPv4 ] }
+            content:
+              str_replace:
+                template: | 
+                  server1 - localhost
+                  server2 - %server_server2_ip%
+                  server3 - %server_server3_ip%
+                params:
+                  "%server_server2_ip%": { get_attr: [ server_server2, accessIPv4 ] }
+                  "%server_server3_ip%": { get_attr: [ server_server3, accessIPv4 ] }
           - path: /opt/cloud-training/runcmd-bash
             permissions: "0700"
             content:
@@ -131,6 +137,11 @@ resources:
                   function exit_success {
                     %swift_signal_notify% --data-binary '{"status": "SUCCESS"}'
                   }
+                  cd /opt/cloud-training
+                  # BEGIN - Terrible Chicken Egg Hack
+                  export MY_PUBLIC_IP=`curl -s http://ipv4.icanhazip.com/`
+                  sed -i "s/server1 - localhost/server1 - $MY_PUBLIC_IP/" server_ips.txt
+                  # END - Terrible Chicken Egg Hack
                   exit_success
                 params:
                   "%swift_signal_notify%": { get_attr: [ swift_signal_handle_server1, curl_cli ] }
@@ -146,7 +157,6 @@ resources:
           - tmux send-keys "multitail /opt/cloud-training/deploy.sh.err /opt/cloud-training/deploy.sh.log" C-m
           - tmux select-window -t runcmd-bash
           - tmux send-keys "/opt/cloud-training/runcmd-bash >> /opt/cloud-training/runcmd-bash.log 2>> /opt/cloud-training/runcmd-bash.err" C-m
-
 
   cloud_config_server2:
     type: OS::Heat::CloudConfig
